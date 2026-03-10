@@ -287,3 +287,169 @@ The URLs were tested for potential exploitation in common injection scenarios:
 
 ### Conclusion
 No exploitation vectors found. The `%` encodings are standard and necessary for URL representation of non-ASCII titles. These URLs are safe for any injection context and cannot be used maliciously. If injected anywhere, they will only result in benign text or valid HTTP requests to Wikipedia articles. This analysis confirms the initial WAF check and extends it to all possible injection scenarios.
+
+## Deep Normalization Check for URLs (Webserver/WAF Perspective)
+Following the user's insistence on deeper checking like a webserver or WAF, this section performs in-depth analysis of normalization vectors, decoding tricks, and potential malicious exploitation beyond simple URL decoding. Normalization involves URL canonicalization, Unicode handling, case folding, and security checks to prevent attacks like path traversal, injection, or bypasses.
+
+### Normalization Fundamentals
+- **URL Decoding**: WAFs and webservers decode `%`-encoded characters. However, multiple decoding layers (double/triple encoding) can bypass single-decode WAFs.
+- **Unicode Normalization**: Converts characters to canonical forms (NFC, NFD, NFKC, NFKD). Attackers use decomposed forms to evade detection (e.g., é decomposed to e + combining acute).
+- **Case Normalization**: URLs are case-insensitive for scheme/host, but path/query may be sensitive.
+- **Path Normalization**: Resolves `..` for traversal, removes redundant slashes.
+- **Security Vectors**: Check for encoded dangerous chars, homoglyphs (visually similar chars), overlong encodings, or steganography.
+
+### Deep Analysis per URL (Normalization and Exploitation Vectors)
+Each URL is analyzed as if processed by a webserver (e.g., Apache, Nginx) or WAF (e.g., ModSecurity, Cloudflare). Steps:
+1. **Raw URL**: Original encoded form.
+2. **Decoded URL**: After standard URL decoding.
+3. **Unicode Normalized**: To NFC form.
+4. **Case Folded**: Lowercase for comparison.
+5. **Path Resolved**: Check for traversal or anomalies.
+6. **Malicious Pattern Check**: Scan for SQL/XSS/command injection after decoding/normalization.
+7. **Normalization Vectors**: Test double decoding, charset changes, etc.
+8. **Exploitation Potential**: How it could be misused in real contexts.
+
+#### 1. https://de.wikipedia.org/wiki/%C3%84hrenlese
+- **Decoded**: https://de.wikipedia.org/wiki/Ährenlese
+- **Unicode Normalized**: Ährenlese (NFC)
+- **Case Folded**: ährenlese
+- **Path Resolved**: /wiki/Ährenlese → valid, no traversal
+- **Malicious Check**: Decodes to "Ährenlese" (German for "Gleaning"). No SQL keywords, XSS scripts, or commands. Harmless.
+- **Normalization Vectors**: Double decode: %C3%84 → C3%84 (invalid), no malicious. No homoglyphs. No overlong UTF-8.
+- **Exploitation Potential**: None. If injected into SQL: 'Ährenlese' – benign string.
+
+#### 2. https://de.wikipedia.org/wiki/%C3%96rtlicher_Geistiger_Rat
+- **Decoded**: https://de.wikipedia.org/wiki/Örtlicher_Geistiger_Rat
+- **Unicode Normalized**: Örtlicher_Geistiger_Rat (NFC)
+- **Case Folded**: örtlicher_geistiger_rat
+- **Path Resolved**: /wiki/Örtlicher_Geistiger_Rat → valid
+- **Malicious Check**: "Örtlicher Geistiger Rat" (Local Spiritual Assembly in Bahai). No dangers.
+- **Normalization Vectors**: Similar to above. No issues.
+- **Exploitation Potential**: Zero.
+
+#### 3. https://de.wikipedia.org/wiki/%CA%BFAbdul-Bah%C4%81%CA%BE
+- **Decoded**: https://de.wikipedia.org/wiki/ʿAbdul-Bahāʼ
+- **Unicode Normalized**: ʿAbdul-Bahāʼ (NFC)
+- **Case Folded**: ʿabdul-bahāʼ
+- **Path Resolved**: Valid article path.
+- **Malicious Check**: Name of Bahai figure. Contains apostrophe-like chars, but no injection potential.
+- **Normalization Vectors**: ʿ (U+02BF) and ʾ (U+02BE) are Arabic modifiers. No double encoding issues. Could confuse parsers if not Unicode-aware, but benign.
+- **Exploitation Potential**: Low. If misused in filename injection, creates file with special chars, but no execution.
+
+#### 4. https://de.wikipedia.org/wiki/B%C4%81b
+- **Decoded**: https://de.wikipedia.org/wiki/Bāb
+- **Unicode Normalized**: Bāb (NFC, ā is U+0101)
+- **Case Folded**: bāb
+- **Path Resolved**: Valid.
+- **Malicious Check**: "Bāb" (Bahai prophet). Harmless.
+- **Normalization Vectors**: ā is macron a. No tricks.
+- **Exploitation Potential**: None.
+
+#### 5. https://de.wikipedia.org/wiki/Bah%C3%A1%E2%80%99%C3%AD-Gemeinde_in_Deutschland
+- **Decoded**: https://de.wikipedia.org/wiki/Bahá'í-Gemeinde_in_Deutschland
+- **Unicode Normalized**: Bahá'í-Gemeinde_in_Deutschland (NFC, ' is U+2019 right single quote)
+- **Case Folded**: bahá'í-gemeinde_in_deutschland
+- **Path Resolved**: Valid.
+- **Malicious Check**: Title includes ' (apostrophe). In SQL, ' could escape strings, but here it's part of title, not payload.
+- **Normalization Vectors**: Double decode: %C3%A1 → á, no further. U+2019 is smart quote, normalized to '. No homoglyph issues (e.g., no Cyrillic ').
+- **Exploitation Potential**: If injected as 'Bahá'í-Gemeinde_in_Deutschland', the ' could break SQL if not escaped, but in URL context, it's safe. WAF would block if vuln detected.
+
+#### 6. https://de.wikipedia.org/wiki/Bah%C4%81%CA%BE%C4%AB-G%C3%A4rten_(Haifa)
+- **Decoded**: https://de.wikipedia.org/wiki/Bahāʼī-Gärten_(Haifa)
+- **Unicode Normalized**: Bahāʼī-Gärten_(Haifa) (NFC)
+- **Case Folded**: bahāʼī-gärten_(haifa)
+- **Path Resolved**: Valid, parentheses handled.
+- **Malicious Check**: Garden name. ä is German umlaut.
+- **Normalization Vectors**: Similar. No issues.
+- **Exploitation Potential**: None.
+
+#### 7. https://de.wikipedia.org/wiki/Bah%C4%81%CA%BEull%C4%81h
+- **Decoded**: https://de.wikipedia.org/wiki/Bahāʼullāh
+- **Unicode Normalized**: Bahāʼullāh (NFC)
+- **Case Folded**: bahāʼullāh
+- **Path Resolved**: Valid.
+- **Malicious Check**: Bahai founder name.
+- **Normalization Vectors**: ullāh has ā. No tricks.
+- **Exploitation Potential**: Zero.
+
+#### 8. https://de.wikipedia.org/wiki/Bund_Bah%C4%81%CA%BEull%C4%81hs
+- **Decoded**: https://de.wikipedia.org/wiki/Bund_Bahāʼullāhs
+- **Unicode Normalized**: Bund_Bahāʼullāhs (NFC)
+- **Case Folded**: bund_bahāʼullāhs
+- **Path Resolved**: Valid.
+- **Malicious Check**: Covenant of Bahaullah.
+- **Normalization Vectors**: Similar.
+- **Exploitation Potential**: None.
+
+#### 9. https://de.wikipedia.org/wiki/Evangelische_Zentralstelle_f%C3%BCr_Weltanschauungsfragen
+- **Decoded**: https://de.wikipedia.org/wiki/Evangelische_Zentralstelle_für_Weltanschauungsfragen
+- **Unicode Normalized**: Evangelische_Zentralstelle_für_Weltanschauungsfragen (NFC)
+- **Case Folded**: evangelische_zentralstelle_für_weltanschauungsfragen
+- **Path Resolved**: Valid, ü normalized.
+- **Malicious Check**: German organization name.
+- **Normalization Vectors**: für has ü. No issues.
+- **Exploitation Potential**: None.
+
+#### 10. https://de.wikipedia.org/wiki/H%C3%A4nde_der_Sache
+- **Decoded**: https://de.wikipedia.org/wiki/Hände_der_Sache
+- **Unicode Normalized**: Hände_der_Sache (NFC)
+- **Case Folded**: hände_der_sache
+- **Path Resolved**: Valid.
+- **Malicious Check**: "Hands of the Cause" in Bahai.
+- **Normalization Vectors**: Hände has ä.
+- **Exploitation Potential**: Zero.
+
+#### 11. https://de.wikipedia.org/wiki/Internationale_Bah%C3%A1%E2%80%99%C3%AD-Gemeinde
+- **Decoded**: https://de.wikipedia.org/wiki/Internationale_Bahá'í-Gemeinde
+- **Unicode Normalized**: Internationale_Bahá'í-Gemeinde (NFC)
+- **Case Folded**: internationale_bahá'í-gemeinde
+- **Path Resolved**: Valid.
+- **Malicious Check**: International Bahai community.
+- **Normalization Vectors**: Similar to #5, ' is U+2019.
+- **Exploitation Potential**: Same as #5, ' could be issue in unescaped contexts, but URL-safe.
+
+#### 12. https://de.wikipedia.org/wiki/Schrein_Baha%27ullahs
+- **Decoded**: https://de.wikipedia.org/wiki/Schrein_Baha'ullahs
+- **Unicode Normalized**: Schrein_Baha'ullahs (NFC, but ' is U+0027 apostrophe)
+- **Case Folded**: schrein_baha'ullahs
+- **Path Resolved**: Valid.
+- **Malicious Check**: Shrine name. Contains '.
+- **Normalization Vectors**: %27 decodes to '. In some old systems, ' might not be encoded, but here it is. No double decode issues.
+- **Exploitation Potential**: ' could escape in SQL if injected as string. E.g., 'Schrein_Baha'ullahs' – the ' breaks the string, allowing injection. High risk if WAF doesn't sanitize!
+
+#### 13. https://de.wikipedia.org/wiki/Sieben_T%C3%A4ler
+- **Decoded**: https://de.wikipedia.org/wiki/Sieben_Täler
+- **Unicode Normalized**: Sieben_Täler (NFC)
+- **Case Folded**: sieben_täler
+- **Path Resolved**: Valid.
+- **Malicious Check**: "Seven Valleys" in Bahai.
+- **Normalization Vectors**: ä.
+- **Exploitation Potential**: None.
+
+#### 14. https://de.wikipedia.org/wiki/Zw%C3%B6lf_ethische_Grunds%C3%A4tze_der_Bahai
+- **Decoded**: https://de.wikipedia.org/wiki/Zwölf_ethische_Grundsätze_der_Bahai
+- **Unicode Normalized**: Zwölf_ethische_Grundsätze_der_Bahai (NFC)
+- **Case Folded**: zwölf_ethische_grundsätze_der_bahai
+- **Path Resolved**: Valid.
+- **Malicious Check**: Twelve principles.
+- **Normalization Vectors**: ö, ä.
+- **Exploitation Potential**: None.
+
+#### 15. https://en.wikipedia.org/wiki/Persecution_of_Bah%C3%A1%CA%BC%C3%ADs
+- **Decoded**: https://en.wikipedia.org/wiki/Persecution_of_Baháʼís
+- **Unicode Normalized**: Persecution_of_Baháʼís (NFC)
+- **Case Folded**: persecution_of_baháʼís
+- **Path Resolved**: Valid.
+- **Malicious Check**: Persecution topic.
+- **Normalization Vectors**: ʿ (U+02BF).
+- **Exploitation Potential**: Zero.
+
+### Key Findings from Deep Normalization Check
+- **Potential Issue Uncovered**: URL #12 (https://de.wikipedia.org/wiki/Schrein_Baha%27ullahs) contains %27, decoding to '. In injection contexts (e.g., SQL), the apostrophe can break string delimiters, enabling SQL injection if the URL is unsanitized. Example: INSERT INTO logs VALUES ('Schrein_Baha'ullahs'); -- injection possible if ' not escaped.
+- **Normalization Tricks**: All URLs use standard UTF-8. No double encoding, overlong sequences, or charset abuse found. Unicode normalization doesn't reveal hidden chars.
+- **Webserver/WAF Perspective**: Modern WAFs (e.g., ModSecurity) decode URLs and check for patterns. These URLs pass as benign. However, if a WAF fails to decode or normalize, #12 could be flagged or misused.
+- **Exploitation Vectors**: Primarily injection via apostrophes in #12. Others are safe due to lack of dangerous chars (< > " ; | etc.).
+- **Uncovered All**: Comprehensive check shows most URLs are harmless. #12 has minor potential in specific vuln contexts, but not malicious by design.
+
+### Final Verdict
+URLs are not inherently malicious. The 'fail' in initial check was superficial decoding; deeper normalization reveals #12 as potentially exploitable in injection scenarios. All others are secure. Report updated. End of deep analysis.
