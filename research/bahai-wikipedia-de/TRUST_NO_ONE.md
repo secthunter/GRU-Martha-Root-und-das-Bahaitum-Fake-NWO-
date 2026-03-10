@@ -1,6 +1,6 @@
 # TRUST_NO_ONE.md
 
-This file contains all collected URLs of the specified GitHub repos/users based on online research. Note: Some exact matches not found; closest or related URLs listed.
+Diese Datei enthält alle gesammelten URLs der angegebenen GitHub-Repos/Benutzer basierend auf Online-Recherche. Hinweis: Einige exakte Übereinstimmungen nicht gefunden; nächste oder verwandte URLs aufgelistet.
 
 ## hartmannlauterbach Repos
 - https://github.com/HeinrichHartmann
@@ -20,12 +20,12 @@ This file contains all collected URLs of the specified GitHub repos/users based 
 - https://github.com/Bloxdy
 
 ## mrbloxx Repos
-- https://github.com/mrbloxx (from workspace context)
+- https://github.com/mrbloxx (aus Workspace-Kontext)
 - https://github.com/myblox
 - https://github.com/MYXXdev/myxxdev.github.io
 
 ## cybermobbing-untersuchung Repos
-- No GitHub repos found. Related documents:
+- Keine GitHub-Repos gefunden. Verwandte Dokumente:
   - https://leolion3.github.io/University_Stuff/Publications/IuG.pdf
   - https://unipub.uni-graz.at/obvugrhs/download/pdf/4413016
   - https://www.bmb.gv.at/Themen/schule/zrp/dibi/inipro/cybermobbing.html
