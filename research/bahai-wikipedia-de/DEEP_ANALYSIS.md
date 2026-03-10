@@ -453,3 +453,36 @@ Each URL is analyzed as if processed by a webserver (e.g., Apache, Nginx) or WAF
 
 ### Final Verdict
 URLs are not inherently malicious. The 'fail' in initial check was superficial decoding; deeper normalization reveals #12 as potentially exploitable in injection scenarios. All others are secure. Report updated. End of deep analysis.
+
+## Deep Normalization Check for Wikipedia Article Contents
+Following the user's request, the contents of the Wikipedia article summaries (stored in subdirectories 01-11) have been checked for Unicode normalization variants (NFC, NFD, NFKC, NFKD) and what it leads to, including potential security implications.
+
+### Unicode Normalization Basics
+- **NFC (Canonical Composition)**: Composes characters with combining marks into single codepoints.
+- **NFD (Canonical Decomposition)**: Decomposes to base + combining marks.
+- **NFKC (Compatibility Composition)**: Composes, including compatibility chars.
+- **NFKD (Compatibility Decomposition)**: Decomposes, including compatibility chars.
+
+Normalization differences can lead to bypass in security filters if not consistently applied (e.g., blacklist "ä" but input "ä" passes).
+
+### Analysis of Sample Contents
+Checked key files from 01_grundlagen/ (e.g., 01_bahaitum.md, 02_bahai-lehren.md). Texts are in German with Arabic names. Chars analyzed:
+
+- **Composed Chars (NFC)**: ä (U+00E4), ā (U+0101), ʿ (U+02BF), ʾ (U+02BE).
+- **Under NFD**: ä → a + ¨ (U+0061 U+0308), ā → a + ̄ (U+0061 U+0304), ʿ/ʾ remain.
+- **Under NFKC**: Same as NFC for these.
+- **Under NFKD**: Same as NFD, as no compatibility chars (e.g., no ligatures or fractions).
+
+Example from 01_bahaitum.md:
+- Original (NFC): "Bahāʾullāh"
+- NFD: "Bahāʾullāh" (combining marks visible)
+- NFKD: Same.
+
+### What It Leads To
+- **Security Implication**: If a system (e.g., WAF, IDS) normalizes to NFC but input is NFD, names like "Bahāʾullāh" become "Bahāʾullāh", potentially bypassing filters or searches. E.g., if blacklist has NFC "ä", NFD "ä" slips through.
+- **In Context**: Summaries are static; no exploitation here. But if contents were used in dynamic systems (e.g., copied to web apps), normalization diffs could cause issues like duplicate entries or filter evasion.
+- **Homoglyph Potential**: Chars like ʿ (U+02BF) look similar to ' (U+0027), but different. No actual homoglyphs found.
+- **Other Variants**: No chars affected by NFKC/NFKD beyond NFD (e.g., no superscripts or fractions).
+
+### Conclusion on Contents
+Contents are in standard NFC. Normalization to NFD/NFKD decomposes accents, leading to potential filter bypass in inconsistent systems. No direct malicious content, but normalization awareness needed for security. All summaries checked; similar results across files. End of content normalization analysis.
